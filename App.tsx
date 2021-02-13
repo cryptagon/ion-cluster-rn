@@ -47,19 +47,25 @@ const {Client, RemoteStream, LocalStream} = require('ion-sdk-js')
 // import {Client, RemoteStream} from 'ion-sdk-js'
 import {IonSFUJSONRPCSignal} from 'ion-sdk-js/lib/signal/json-rpc-impl'
 
-
+const webrtcConfig = {
+  codec: 'h264', 
+  sdpSemantics: 'unified-plan',
+  iceServers: [
+    {'urls': 'stun:stun.l.google.com:19302'},
+  ],
+}
 
 const HOST = "wss://sfu.dogfood.tandem.chat"
 // const HOST = 'ws://localhost:7000'
-const SESSION_ID = "20ff6701-0b20-4167-84d3-4d9ef00e1a9f"
-const TOKEN = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiIyMGZmNjcwMS0wYjIwLTQxNjctODRkMy00ZDllZjAwZTFhOWYiLCJzaWQiOiIyMGZmNjcwMS0wYjIwLTQxNjctODRkMy00ZDllZjAwZTFhOWYifQ.jAp49x3QYHkLJu4HhH7IEnQJrzFCbw8nWEz-j-hJcXFH7Drn2skpH0EY3uhBOLgi7Es5kNFdg31xSeLRroe8nw"
+const SESSION_ID = "1330d0b6-9e31-43b8-8922-fea385d3c79f"
+const TOKEN ="eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiIxMzMwZDBiNi05ZTMxLTQzYjgtODkyMi1mZWEzODVkM2M3OWYiLCJzaWQiOiIxMzMwZDBiNi05ZTMxLTQzYjgtODkyMi1mZWEzODVkM2M3OWYifQ.TMGMJn2qXNWoWBvcLYZ98TgbGDi-1x3u0YpC0zOv2ynsnzyEsseOupzZ03tdY2ztFeNdxtgzfJBxC5OsijB-vQ"
 
 const ENDPOINT = `${HOST}/session/${SESSION_ID}?access_token=${TOKEN}`
 
 class OfferDebugSignal extends IonSFUJSONRPCSignal {
   async offer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
-    offer.sdp = offer.sdp.replace('640c34', '42e034')
-    offer.sdp = offer.sdp.replace('640c1f', '42e034')
+    offer.sdp = offer.sdp.split('640c34').join('42e034')
+    offer.sdp = offer.sdp.split('640c1f').join('42e034')
     // console.log('offer: ', offer.sdp)
     const r = await super.offer(offer)
     // console.log('response: ', r.sdp)
@@ -69,13 +75,12 @@ class OfferDebugSignal extends IonSFUJSONRPCSignal {
 
   async answer(answer: RTCSessionDescriptionInit): void {
     console.log('inbound negotiation', answer.sdp)
-    answer.sdp = answer.sdp.replace('640c34', '42e034')
-    answer.sdp = answer.sdp.replace('640c1f', '42e034') 
+    answer.sdp = answer.sdp.split('640c34').join('42e034')
+    answer.sdp = answer.sdp.split('640c1f').join('42e034') 
     await super.answer(answer)
   }
 
 }
-
 
 type ClientProps = {
   sessionID: string
@@ -90,7 +95,7 @@ const IonClient = (props: ClientProps) => {
 
   useEffect(() => {
     const signal = new OfferDebugSignal(ENDPOINT)
-    const client = new Client(signal, {codec: 'h264', sdpSemantics: 'unified-plan'})
+    const client = new Client(signal, webrtcConfig) 
     // client.onspeaker = (s) => {console.log('active speakers: ', s)}
 
     console.log('built signal: ', signal)
@@ -175,7 +180,7 @@ const IonClient = (props: ClientProps) => {
       )} */}
   
       <FlatGrid
-        itemDimension={240}
+        itemDimension={200}
         data={streams}
         spacing={2}
         renderItem={({ item }) => (<RTCView streamURL={item.toURL()} style={styles.video}/>)}
@@ -223,8 +228,9 @@ const styles = StyleSheet.create({
   },
   video: {
     flex: 3,
-    width: 240,
-    height: 240,
+    paddingRight: 8,
+    paddingLeft: 8,
+    height: 200,
   },
   panel: {
     flex:2,
