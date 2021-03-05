@@ -39,6 +39,32 @@ import {
 import InCallManager from 'react-native-incall-manager';
 import { FlatGrid } from 'react-native-super-grid';
 
+import Lightbox from 'react-native-lightbox';
+
+import RNCallKeep from 'react-native-callkeep';
+
+const callKeepOptions = {
+  ios: {
+    appName: 'IonCluster',
+  },
+  android: {
+    alertTitle: 'Permissions required',
+  //   alertDescription: 'This application needs to access your phone accounts',
+  //   cancelButton: 'Cancel',
+  //   okButton: 'ok',
+  //   imageName: 'phone_account_icon',
+  //   additionalPermissions: [PermissionsAndroid.PERMISSIONS.example],
+  //   // Required to get audio in background when using Android 11
+  //   foregroundService: {
+  //     channelId: 'com.company.my',
+  //     channelName: 'Foreground service for my app',
+  //     notificationTitle: 'My app is running on background',
+  //     notificationIcon: 'Path to the resource icon of the notification',
+  //   }, 
+  }
+};
+
+
 console.log('registering globals')
 registerGlobals()
 console.log('globals: ', global)
@@ -57,8 +83,8 @@ const webrtcConfig = {
 
 const HOST = "wss://sfu.dogfood.tandem.chat"
 // const HOST = 'ws://localhost:7000'
-const SESSION_ID = "1330d0b6-9e31-43b8-8922-fea385d3c79f"
-const TOKEN ="eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiIxMzMwZDBiNi05ZTMxLTQzYjgtODkyMi1mZWEzODVkM2M3OWYiLCJzaWQiOiIxMzMwZDBiNi05ZTMxLTQzYjgtODkyMi1mZWEzODVkM2M3OWYifQ.TMGMJn2qXNWoWBvcLYZ98TgbGDi-1x3u0YpC0zOv2ynsnzyEsseOupzZ03tdY2ztFeNdxtgzfJBxC5OsijB-vQ"
+const SESSION_ID = "5aa8b3eb-c8e4-4bec-9f0a-f9d2d364972f"
+const TOKEN ="eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiI1YWE4YjNlYi1jOGU0LTRiZWMtOWYwYS1mOWQyZDM2NDk3MmYiLCJzaWQiOiI1YWE4YjNlYi1jOGU0LTRiZWMtOWYwYS1mOWQyZDM2NDk3MmYifQ.8xOZAROCZg2Lw6eh8wjdhQ_l0fQ7tCUtO3PQo-ZY1K5SSk-SbZ-tUNZzQIcWPcegn5oUR80UeflQbHYac9rSyw"
 
 const ENDPOINT = `${HOST}/session/${SESSION_ID}?access_token=${TOKEN}`
 
@@ -106,7 +132,15 @@ const IonClient = (props: ClientProps) => {
       await client.join(SESSION_ID)
       console.log('connected')
       setState('connected')
-      publishLocal()
+      await publishLocal()
+      
+      RNCallKeep.addEventListener('didLoadWithEvents', async(events) => {
+        // `events` is passed as an Array chronologically, handle or ignore events based on the app's logic
+        // see example usage in https://github.com/react-native-webrtc/react-native-callkeep/pull/169 or https://github.com/react-native-webrtc/react-native-callkeep/pull/205
+      });
+      await RNCallKeep.setup(callKeepOptions)
+      RNCallKeep.startCall(SESSION_ID, "IonCluster", "Meeting", "generic", true)
+      RNCallKeep.setCurrentCallActive(SESSION_ID); 
     }
 
     const publishLocal = async () => {
@@ -129,7 +163,9 @@ const IonClient = (props: ClientProps) => {
         setStreams(streams => streams.filter(s => s.id != e.stream.id))
       }
     }
-    
+
+
+
     return () => {
       client.transports[1].pc.onremovestream = null
       client.transports[1].pc.onaddstream  = null
@@ -183,7 +219,19 @@ const IonClient = (props: ClientProps) => {
         itemDimension={200}
         data={streams}
         spacing={2}
-        renderItem={({ item }) => (<RTCView streamURL={item.toURL()} style={styles.video}/>)}
+        renderItem={
+          ({ item }) => (
+            <Lightbox swipeToDismiss={false}>
+                <ScrollView
+                  minimumZoomScale={1}
+                  maximumZoomScale={4}
+                  centerContent={true}
+                >
+                  <RTCView streamURL={item.toURL()} style={styles.video}/>
+                </ScrollView>
+            </Lightbox>
+          )
+        }
       />
       </View>
    </View>

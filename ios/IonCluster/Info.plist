@@ -53,10 +53,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-
 	<key>NSCameraUsageDescription</key>
-<string>Camera permission description</string>
-<key>NSMicrophoneUsageDescription</key>
-<string>Microphone permission description</string>
+	<string>Camera permission description</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>voip</string>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone permission description</string>
 </dict>
 </plist>
