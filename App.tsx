@@ -133,6 +133,7 @@ const useIonStore = create<IonState>((set, get) => ({
   connect: async (sessionID: string) => {
     const signal = new OfferDebugSignal(ENDPOINT)
     const client = new Client(signal, webrtcConfig) 
+    set(state => ({client: client, signal: signal}))
     // client.onspeaker = (s) => {console.log('active speakers: ', s)}
 
     console.log('built signal: ', signal)
@@ -185,12 +186,17 @@ const useIonStore = create<IonState>((set, get) => ({
         state.client.close()
       }
       state.signal?.close()
+      state.localStream?.getTracks().map(t => t.stop())
+
+      RNCallKeep.endCall(SESSION_ID)
 
       return {
         signal: null,
         client: null,
         sessionID: '',
         connectionState: 'disconnected',
+        localStream: null,
+        remoteStreams: [],
       }
     })
   },
@@ -211,28 +217,24 @@ const useIonStore = create<IonState>((set, get) => ({
 const IonClient = (props: ClientProps) => {
   const ionStore = useIonStore()
 
-
-  useEffect(() => {
-    ionStore.connect('')
-    return () => ionStore.disconnect()
-  }, [])
-
   console.log('streams: ', ionStore.remoteStreams)
   return (
     <View>
       <Text>state: {ionStore.connectionState}</Text>
       <View>
-      { ionStore.localStream && (
+      
         <View style={{flexDirection:'row'}}>
-          <RTCView streamURL={ionStore.localStream.toURL()} style={styles.videoSelf} />
+          <RTCView streamURL={ionStore.localStream?.toURL()} style={styles.videoSelf} />
           <View style={styles.panel}>
+            {ionStore.connectionState == 'connected' ? (
+              <Button title="disconnect" onPress={ionStore.disconnect} />
+            ): (
+              <Button title="connect" onPress={ionStore.connect} />
+            )}
             <Button title={ ionStore.usingRearCamera? "Front Camera" : "Rear Camera"} onPress={ionStore.switchCameras}/> 
             <Button title={ ionStore.usingSpeakerphone ? "Headset": "Speakerphone"  } onPress={ionStore.switchSpeaker}/>
         </View>
-
-        </View> 
-        )
-      }
+      </View> 
       <Text>VIDEOS:</Text>
       <ScrollView>
         <View style={styles.gridView}>
