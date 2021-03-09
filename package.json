@@ -18,7 +18,8 @@
     "react-native-incall-manager": "^3.3.0",
     "react-native-lightbox": "^0.8.1",
     "react-native-super-grid": "^4.1.1",
-    "react-native-webrtc": "https://github.com/billylindeman/react-native-webrtc.git#1.87.1-Transceiver-API"
+    "react-native-webrtc": "https://github.com/billylindeman/react-native-webrtc.git#1.87.1-Transceiver-API",
+    "zustand": "^3.3.3"
   },
   "devDependencies": {
     "@babel/core": "^7.8.4",

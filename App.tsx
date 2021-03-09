@@ -17,31 +17,24 @@ import {
   Text,
   StatusBar,
   Button,
+  Dimensions,
 } from 'react-native';
 
 import {
-  Header,
-  LearnMoreLinks,
   Colors,
-  DebugInstructions,
-  ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
+
 import {
-  RTCPeerConnection,
-  RTCIceCandidate,
-  RTCSessionDescription,
   RTCView,
   MediaStream,
-  MediaStreamTrack,
-  mediaDevices,
   registerGlobals
 } from 'react-native-webrtc';
 import InCallManager from 'react-native-incall-manager';
-import { FlatGrid } from 'react-native-super-grid';
-
 import Lightbox from 'react-native-lightbox';
 
 import RNCallKeep from 'react-native-callkeep';
+
+import create from 'zustand'
 
 const callKeepOptions = {
   ios: {
@@ -83,8 +76,8 @@ const webrtcConfig = {
 
 const HOST = "wss://sfu.dogfood.tandem.chat"
 // const HOST = 'ws://localhost:7000'
-const SESSION_ID = "5aa8b3eb-c8e4-4bec-9f0a-f9d2d364972f"
-const TOKEN ="eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiI1YWE4YjNlYi1jOGU0LTRiZWMtOWYwYS1mOWQyZDM2NDk3MmYiLCJzaWQiOiI1YWE4YjNlYi1jOGU0LTRiZWMtOWYwYS1mOWQyZDM2NDk3MmYifQ.8xOZAROCZg2Lw6eh8wjdhQ_l0fQ7tCUtO3PQo-ZY1K5SSk-SbZ-tUNZzQIcWPcegn5oUR80UeflQbHYac9rSyw"
+const SESSION_ID = "eb207afa-a8ea-4e41-bd59-e919b4d6f7c2"
+const TOKEN ="eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJyaWQiOiJlYjIwN2FmYS1hOGVhLTRlNDEtYmQ1OS1lOTE5YjRkNmY3YzIiLCJzaWQiOiJlYjIwN2FmYS1hOGVhLTRlNDEtYmQ1OS1lOTE5YjRkNmY3YzIifQ.sWqzn0RtHLJkKRghV0Z6GVQ4EnXG8AiLLpdSY62pFIoV8pU0hDbOOV54mP2A9a6qM3XUzPHjpOWqW1QGcz51Lw"
 
 const ENDPOINT = `${HOST}/session/${SESSION_ID}?access_token=${TOKEN}`
 
@@ -112,14 +105,32 @@ type ClientProps = {
   sessionID: string
 }
 
+type IonState = {
+  signal: null | OfferDebugSignal,
+  client: null | typeof Client,
+  sessionID: null | string,
+  localStream: null | MediaStream,
+  usingRearCamera: boolean,
+  usingSpeakerphone: boolean,
+  remoteStreams: (typeof RemoteStream)[],
+  connectionState: 'disconnected' | 'connecting' | 'connected',
 
-const IonClient = (props: ClientProps) => {
-  const [state, setState] = useState('connecting')
+  // //actions
+  // switchCameras: () => void, 
+  // setSpeaker: () => void,
+}
 
-  const [localStream, setLocal] = useState<null | MediaStream>(null)
-  const [streams, setStreams] = useState<MediaStream[]>([])
+const useIonStore = create<IonState>((set, get) => ({
+  signal: null,
+  client: null,
+  sessionID: '',
+  localStream: null,
+  usingRearCamera: false,
+  usingSpeakerphone: false,
+  remoteStreams: [],
+  connectionState: 'disconnected', 
 
-  useEffect(() => {
+  connect: async (sessionID: string) => {
     const signal = new OfferDebugSignal(ENDPOINT)
     const client = new Client(signal, webrtcConfig) 
     // client.onspeaker = (s) => {console.log('active speakers: ', s)}
@@ -128,10 +139,9 @@ const IonClient = (props: ClientProps) => {
     console.log('build client: ', client)
     signal.onopen = async () => {
       console.log('connecting')
-      setState('connecting')
+      set({connectionState: 'connecting'})
       await client.join(SESSION_ID)
-      console.log('connected')
-      setState('connected')
+      set({connectionState: 'connected'})
       await publishLocal()
       
       RNCallKeep.addEventListener('didLoadWithEvents', async(events) => {
@@ -143,6 +153,8 @@ const IonClient = (props: ClientProps) => {
       RNCallKeep.setCurrentCallActive(SESSION_ID); 
     }
 
+
+
     const publishLocal = async () => {
       const local = await LocalStream.getUserMedia({
         audio: true,
@@ -151,88 +163,90 @@ const IonClient = (props: ClientProps) => {
       });
     
       client.publish(local)
-      setLocal(local)
+      set({localStream: local})
 
       client.transports[1].pc.onaddstream = (e:any) => {
         console.log('on add stream: ', e.stream)
-        if(e && e.stream.getVideoTracks().length > 0) setStreams(streams => [...streams, e.stream])
+        if(e && e.stream.getVideoTracks().length > 0) set(state => ({remoteStreams: [...state.remoteStreams, e.stream]}))
       }
 
       client.transports[1].pc.onremovestream = (e:any) => {
         console.log('on remove stream', e.stream)
-        setStreams(streams => streams.filter(s => s.id != e.stream.id))
+        // setStreams(streams => streams.filter(s => s.id != e.stream.id))
+        set(state => ({remoteStreams: state.remoteStreams.filter(s => s.id != e.stream.id)}))
       }
     }
+  },
+  disconnect: () => {
+    set(state => {
+      if(state.client) {
+        state.client.transports[1].pc.onremovestream = null
+        state.client.transports[1].pc.onaddstream  = null
+        state.client.close()
+      }
+      state.signal?.close()
+
+      return {
+        signal: null,
+        client: null,
+        sessionID: '',
+        connectionState: 'disconnected',
+      }
+    })
+  },
+  switchCameras: () => {
+    set(state => {
+      state.localStream?.getVideoTracks()[0]._switchCamera()
+      return {usingRearCamera: true}
+    })
+  },
+  switchSpeaker: () => {
+    set(state => {
+      InCallManager.setSpeakerphoneOn(!state.usingSpeakerphone)
+      return {usingSpeakerphone: !state.usingSpeakerphone}
+    })
+  }
+}))
+
+const IonClient = (props: ClientProps) => {
+  const ionStore = useIonStore()
 
 
-
-    return () => {
-      client.transports[1].pc.onremovestream = null
-      client.transports[1].pc.onaddstream  = null
-      signal.close()
-      client.close()
-    }
+  useEffect(() => {
+    ionStore.connect('')
+    return () => ionStore.disconnect()
   }, [])
 
-
-  const [rearCamera, setRearCamera] = useState(false)
-  const switchCameras = () => {
-    const track = localStream?.getVideoTracks()[0]
-    console.log("switching track: ", track )
-    track._switchCamera()
-    setRearCamera(!rearCamera)
-  }
-
-  const [speaker, setSpeaker] = useState(false)
-  const switchSpeaker = () => {
-    InCallManager.setSpeakerphoneOn(!speaker)
-    setSpeaker(!speaker)
-  }
-
-  console.log('streams: ', streams)
+  console.log('streams: ', ionStore.remoteStreams)
   return (
     <View>
-      <Text>state: {state}</Text>
+      <Text>state: {ionStore.connectionState}</Text>
       <View>
-      { localStream && (
+      { ionStore.localStream && (
         <View style={{flexDirection:'row'}}>
-          <RTCView streamURL={localStream.toURL()} style={styles.video} />
+          <RTCView streamURL={ionStore.localStream.toURL()} style={styles.videoSelf} />
           <View style={styles.panel}>
-            <Button title={ rearCamera? "Front Camera" : "Rear Camera"} onPress={switchCameras}/> 
-            <Button title={ speaker ? "Headset": "Speakerphone"  } onPress={switchSpeaker}/>
+            <Button title={ ionStore.usingRearCamera? "Front Camera" : "Rear Camera"} onPress={ionStore.switchCameras}/> 
+            <Button title={ ionStore.usingSpeakerphone ? "Headset": "Speakerphone"  } onPress={ionStore.switchSpeaker}/>
         </View>
 
         </View> 
         )
       }
       <Text>VIDEOS:</Text>
-      {/* {streams.map(s => 
-        ( 
-          <View>
-            <Text>{s.id}</Text>
-            <RTCView streamURL={s.toURL()} style={styles.video}/>
-          </View>
-        )
-      )} */}
-  
-      <FlatGrid
-        itemDimension={200}
-        data={streams}
-        spacing={2}
-        renderItem={
-          ({ item }) => (
-            <Lightbox swipeToDismiss={false}>
-                <ScrollView
-                  minimumZoomScale={1}
-                  maximumZoomScale={4}
-                  centerContent={true}
-                >
-                  <RTCView streamURL={item.toURL()} style={styles.video}/>
-                </ScrollView>
-            </Lightbox>
-          )
-        }
-      />
+      <ScrollView>
+        <View style={styles.gridView}>
+          {ionStore.remoteStreams.map(s => 
+            ( 
+              <Lightbox activeProps={{width: '100%', height: '100%', objectFit: 'contain'}}>
+                <View style={styles.itemContainer}>
+                  <RTCView objectFit='contain' streamURL={s.toURL()} style={styles.video}/>
+                </View>
+              </Lightbox>
+            )
+          )}
+        </View>
+      </ScrollView>
       </View>
    </View>
   )
@@ -246,18 +260,17 @@ const App = () => {
     <>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView>
-        {/* <ScrollView */}
-          {/* contentInsetAdjustmentBehavior="automatic" */}
-          {/* style={styles.scrollView}> */}
           <Text style={styles.sectionTitle}>IonCluster</Text>
           <View style={styles.body}>
             <IonClient sessionID="test-session" />
           </View>
-        {/* </ScrollView> */}
       </SafeAreaView>
     </>
   );
 };
+
+
+const screenWidth = Dimensions.get("window").width;
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -274,11 +287,29 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingHorizontal: 24,
   },
-  video: {
+  videoSelf: {
     flex: 3,
     paddingRight: 8,
     paddingLeft: 8,
+    borderRadius: 24,
     height: 200,
+  },
+  gridView: {
+    marginTop: 10,
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap"
+  },
+  itemContainer: {
+    width: screenWidth / 4,
+    height: screenWidth / 4,
+    padding: 8,
+  },
+  video: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    borderRadius: 24,
   },
   panel: {
     flex:2,
