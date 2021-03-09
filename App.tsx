@@ -178,15 +178,15 @@ const useIonStore = create<IonState>((set, get) => ({
       }
     }
   },
-  disconnect: () => {
+  disconnect: async () => {
     set(state => {
+      state.localStream?.getTracks().map(t => t.stop())
       if(state.client) {
         state.client.transports[1].pc.onremovestream = null
         state.client.transports[1].pc.onaddstream  = null
         state.client.close()
       }
       state.signal?.close()
-      state.localStream?.getTracks().map(t => t.stop())
 
       RNCallKeep.endCall(SESSION_ID)
 
@@ -200,6 +200,7 @@ const useIonStore = create<IonState>((set, get) => ({
       }
     })
   },
+
   switchCameras: () => {
     set(state => {
       state.localStream?.getVideoTracks()[0]._switchCamera()
